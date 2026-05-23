@@ -14,43 +14,79 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+    /* ── Tipografía ─────────────────────────────────────── */
     html, body, [class*="css"] { font-family: 'Segoe UI', sans-serif; }
-    h1 { color: #1a2e4a; letter-spacing: -0.5px; }
-    h2, h3 { color: #1a2e4a; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }
-    section[data-testid="stSidebar"] { background: #f0f4f9; border-right: 1px solid #dde3ed; }
+
+    /* ── Encabezados — adaptables al tema ──────────────── */
+    h2, h3 {
+        border-bottom: 2px solid rgba(128,128,128,0.25);
+        padding-bottom: 6px;
+    }
+
+    /* ── Sidebar — sin color fijo, hereda el tema ──────── */
+    section[data-testid="stSidebar"] {
+        border-right: 1px solid rgba(128,128,128,0.15);
+    }
+    /* Fuerza visibilidad del texto en sidebar en modo oscuro */
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] div {
+        color: inherit !important;
+    }
+
+    /* ── Botones ────────────────────────────────────────── */
     div.stButton > button {
-        background: #1a2e4a; color: white; border: none;
+        background: #2563eb; color: white; border: none;
         border-radius: 6px; padding: 0.45rem 1.2rem;
         font-weight: 600; transition: background 0.2s;
     }
-    div.stButton > button:hover { background: #2d4a72; }
+    div.stButton > button:hover { background: #1d4ed8; }
+
+    /* ── Badges proveedor ───────────────────────────────── */
     .badge-openai {
-        display:inline-block; background:#10a37f; color:white;
-        font-size:0.72rem; font-weight:700; padding:2px 8px;
+        display:inline-block; background:#10a37f; color:#fff;
+        font-size:0.72rem; font-weight:700; padding:2px 9px;
         border-radius:12px; margin-left:6px; vertical-align:middle;
     }
     .badge-gemini {
-        display:inline-block; background:#4285F4; color:white;
-        font-size:0.72rem; font-weight:700; padding:2px 8px;
+        display:inline-block; background:#4285F4; color:#fff;
+        font-size:0.72rem; font-weight:700; padding:2px 9px;
         border-radius:12px; margin-left:6px; vertical-align:middle;
     }
+
+    /* ── Métricas ───────────────────────────────────────── */
     div[data-testid="metric-container"] {
-        background: #f8fafc; border: 1px solid #e2e8f0;
+        border: 1px solid rgba(128,128,128,0.2);
         border-radius: 8px; padding: 10px 14px;
     }
+
+    /* ── Caja comparativa ───────────────────────────────── */
     .compare-box {
-        background: #f0f7ff; border: 1px solid #bfdbfe;
+        border: 1px solid rgba(96,165,250,0.4);
         border-radius: 8px; padding: 12px 16px; margin-top: 8px;
     }
-    .score-bar-container { background:#e2e8f0; border-radius:8px; height:12px; margin:4px 0; }
-    .score-bar { background:#1a2e4a; border-radius:8px; height:12px; }
-    .candidate-card {
-        border: 1px solid #e2e8f0; border-radius:10px;
-        padding:16px; background:#fafbfc; margin-bottom:12px;
+
+    /* ── Scorecard bars ─────────────────────────────────── */
+    .score-bar-container {
+        background: rgba(128,128,128,0.2);
+        border-radius: 8px; height: 12px; margin: 4px 0;
     }
-    .fit-alta   { color:#16a34a; font-weight:700; }
-    .fit-media  { color:#ca8a04; font-weight:700; }
-    .fit-baja   { color:#dc2626; font-weight:700; }
+    .score-bar { background: #2563eb; border-radius: 8px; height: 12px; }
+
+    /* ── Tarjeta candidato ──────────────────────────────── */
+    .candidate-card {
+        border: 1px solid rgba(128,128,128,0.2); border-radius: 10px;
+        padding: 16px; margin-bottom: 12px;
+    }
+
+    /* ── Colores semáforo ───────────────────────────────── */
+    .fit-alta  { color: #16a34a; font-weight: 700; }
+    .fit-media { color: #ca8a04; font-weight: 700; }
+    .fit-baja  { color: #dc2626; font-weight: 700; }
+
+    /* ── Info / warning boxes más legibles ─────────────── */
+    div[data-testid="stAlert"] { border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -115,7 +151,12 @@ if proveedor == "OpenAI":
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
     except ImportError:
-        st.error("Instala openai: `pip install openai`")
+        st.error(
+            "La librería **openai** no está instalada.\n\n"
+            "Ejecuta en tu terminal:\n```\npip install openai\n```\n"
+            "Luego reinicia Streamlit."
+        )
+        st.info("Alternativa: cambia el proveedor a **Gemini** en el panel izquierdo.")
         st.stop()
 else:
     try:
@@ -123,7 +164,12 @@ else:
         from google.genai import types as gtypes
         client = genai.Client(api_key=api_key)
     except ImportError:
-        st.error("Instala google-genai: `pip install google-genai`")
+        st.error(
+            "La librería **google-genai** no está instalada.\n\n"
+            "Ejecuta en tu terminal:\n```\npip install google-genai\n```\n"
+            "Luego reinicia Streamlit."
+        )
+        st.info("Alternativa: cambia el proveedor a **OpenAI** en el panel izquierdo.")
         st.stop()
 
 

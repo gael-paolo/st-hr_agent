@@ -4,3 +4,4 @@ numpy
 scikit-learn
 google-genai
 openpyxl
+openai
