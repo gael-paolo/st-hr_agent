@@ -43,14 +43,9 @@ st.markdown("""
     }
     div.stButton > button:hover { background: #1d4ed8; }
 
-    /* ── Badges proveedor ───────────────────────────────── */
+    /* ── Badge modelo ─────────────────────────────────────── */
     .badge-openai {
         display:inline-block; background:#10a37f; color:#fff;
-        font-size:0.72rem; font-weight:700; padding:2px 9px;
-        border-radius:12px; margin-left:6px; vertical-align:middle;
-    }
-    .badge-gemini {
-        display:inline-block; background:#4285F4; color:#fff;
         font-size:0.72rem; font-weight:700; padding:2px 9px;
         border-radius:12px; margin-left:6px; vertical-align:middle;
     }
@@ -61,11 +56,6 @@ st.markdown("""
         border-radius: 8px; padding: 10px 14px;
     }
 
-    /* ── Caja comparativa ───────────────────────────────── */
-    .compare-box {
-        border: 1px solid rgba(96,165,250,0.4);
-        border-radius: 8px; padding: 12px 16px; margin-top: 8px;
-    }
 
     /* ── Scorecard bars ─────────────────────────────────── */
     .score-bar-container {
@@ -91,114 +81,57 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🧠 People Analytics Assistant")
-st.caption("Powered by OpenAI · Gemini")
+st.caption("Powered by OpenAI")
 
 # =========================================================
 # SIDEBAR – CONFIGURACIÓN
 # =========================================================
 st.sidebar.header("⚙️ Configuración")
 
-proveedor = st.sidebar.radio("Proveedor de IA", ["OpenAI", "Gemini"], horizontal=True)
+MODELOS = {
+    "GPT-4o Mini":  "gpt-4o-mini",
+    "GPT-4o":       "gpt-4o",
+    "GPT-4.1 Mini": "gpt-4.1-mini",
+    "GPT-4.1":      "gpt-4.1",
+    "o4-mini":      "o4-mini",
+    "o3-mini":      "o3-mini",
+}
 
-if proveedor == "OpenAI":
-    MODELOS = {
-        "GPT-4o Mini":  "gpt-4o-mini",
-        "GPT-4o":       "gpt-4o",
-        "GPT-4.1 Mini": "gpt-4.1-mini",
-        "GPT-4.1":      "gpt-4.1",
-        "o4-mini":      "o4-mini",
-        "o3-mini":      "o3-mini",
-    }
-    api_key = st.sidebar.text_input("OpenAI API Key", type="password")
-else:
-    MODELOS = {
-        "Gemini 2.0 Flash": "gemini-2.0-flash",
-        "Gemini 2.5 Flash": "gemini-2.5-flash",
-        "Gemini 2.5 Pro":   "gemini-2.5-pro",
-    }
-    api_key = st.sidebar.text_input("Gemini API Key", type="password")
-
-modelo_label = st.sidebar.selectbox("Modelo principal", list(MODELOS.keys()))
+api_key     = st.sidebar.text_input("🔑 OpenAI API Key", type="password")
+modelo_label = st.sidebar.selectbox("Modelo", list(MODELOS.keys()))
 modelo_id    = MODELOS[modelo_label]
 
-# ── Modo comparativo (opcional) ──────────────────────────
-modo_comparativo = st.sidebar.checkbox("🔀 Activar modo comparativo")
-modelo_b_id = None
-if modo_comparativo:
-    st.sidebar.caption("Selecciona un segundo modelo para comparar resultados:")
-    opciones_b = {k: v for k, v in MODELOS.items() if k != modelo_label}
-    if opciones_b:
-        modelo_b_label = st.sidebar.selectbox("Modelo B", list(opciones_b.keys()))
-        modelo_b_id    = opciones_b[modelo_b_label]
-    else:
-        st.sidebar.warning("Necesitas al menos 2 modelos disponibles para comparar.")
-        modo_comparativo = False
-
-badge_cls = "openai" if proveedor == "OpenAI" else "gemini"
 st.sidebar.markdown(
-    f'Usando: <span class="badge-{badge_cls}">{proveedor} · {modelo_label}</span>',
+    f'Usando: <span class="badge-openai">OpenAI · {modelo_label}</span>',
     unsafe_allow_html=True
 )
 
 if not api_key:
-    st.warning("🔑 Introduce tu API Key en el panel izquierdo para activar el asistente.")
+    st.warning("🔑 Introduce tu OpenAI API Key en el panel izquierdo para activar el asistente.")
     st.stop()
 
 # ── Inicializar cliente ───────────────────────────────────
-client = None
-if proveedor == "OpenAI":
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-    except ImportError:
-        st.error(
-            "La librería **openai** no está instalada.\n\n"
-            "Ejecuta en tu terminal:\n```\npip install openai\n```\n"
-            "Luego reinicia Streamlit."
-        )
-        st.info("Alternativa: cambia el proveedor a **Gemini** en el panel izquierdo.")
-        st.stop()
-else:
-    try:
-        from google import genai
-        from google.genai import types as gtypes
-        client = genai.Client(api_key=api_key)
-    except ImportError:
-        st.error(
-            "La librería **google-genai** no está instalada.\n\n"
-            "Ejecuta en tu terminal:\n```\npip install google-genai\n```\n"
-            "Luego reinicia Streamlit."
-        )
-        st.info("Alternativa: cambia el proveedor a **OpenAI** en el panel izquierdo.")
-        st.stop()
+try:
+    from openai import OpenAI
+    client = OpenAI(api_key=api_key)
+except ImportError:
+    st.error(
+        "La librería **openai** no está instalada.\n\n"
+        "Ejecuta en tu terminal:\n```\npip install openai\n```\n"
+        "Luego reinicia Streamlit."
+    )
+    st.stop()
 
 
 # =========================================================
 # FUNCIONES UTILITARIAS
 # =========================================================
-def _llamar(model_id: str, prompt: str, temperature: float = 0) -> str:
-    if proveedor == "OpenAI":
-        kwargs = {"model": model_id, "messages": [{"role": "user", "content": prompt}]}
-        if not model_id.startswith("o"):
-            kwargs["temperature"] = temperature
-        resp = client.chat.completions.create(**kwargs)
-        return resp.choices[0].message.content.strip()
-    else:
-        from google.genai import types as gtypes
-        resp = client.models.generate_content(
-            model=model_id,
-            contents=prompt,
-            config=gtypes.GenerateContentConfig(temperature=temperature)
-        )
-        return resp.text.strip()
-
-
 def llamar_modelo(prompt: str, temperature: float = 0) -> str:
-    return _llamar(modelo_id, prompt, temperature)
-
-
-def llamar_modelo_b(prompt: str, temperature: float = 0) -> str:
-    return _llamar(modelo_b_id, prompt, temperature) if modelo_b_id else ""
+    kwargs = {"model": modelo_id, "messages": [{"role": "user", "content": prompt}]}
+    if not modelo_id.startswith("o"):
+        kwargs["temperature"] = temperature
+    resp = client.chat.completions.create(**kwargs)
+    return resp.choices[0].message.content.strip()
 
 
 def descargar_csv(df_result: pd.DataFrame, nombre: str = "resultado"):
@@ -210,19 +143,6 @@ def descargar_csv(df_result: pd.DataFrame, nombre: str = "resultado"):
         file_name=f"{nombre}.csv",
         mime="text/csv",
     )
-
-
-def mostrar_comparativo(col_a: list, col_b: list, label_a: str, label_b: str, etiqueta_col: str):
-    """Muestra tabla comparativa lado a lado entre modelo A y modelo B."""
-    df_comp = pd.DataFrame({
-        etiqueta_col: range(1, len(col_a) + 1),
-        f"Modelo A – {label_a}": col_a,
-        f"Modelo B – {label_b}": col_b,
-    })
-    st.markdown('<div class="compare-box">', unsafe_allow_html=True)
-    st.subheader("🔀 Comparativa de modelos")
-    st.dataframe(df_comp, use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # =========================================================
@@ -270,14 +190,13 @@ if seccion.startswith("1"):
     columna = st.selectbox("Columna de texto", df.columns)
 
     if st.button("▶ Clasificar Sentimiento"):
-        resultados_a, resultados_b = [], []
+        resultados = []
         bar = st.progress(0)
         total = len(df)
 
         for i, text in enumerate(df[columna]):
             if pd.isna(text):
-                resultados_a.append("Nulo")
-                if modo_comparativo: resultados_b.append("Nulo")
+                resultados.append("Nulo")
             else:
                 prompt = (
                     f'Clasifica el sentimiento de este texto: "{text}" '
@@ -290,12 +209,10 @@ if seccion.startswith("1"):
                     if "NEUTRO"   in u: return "Neutro"
                     return "Indefinido"
 
-                resultados_a.append(parse_sent(llamar_modelo(prompt)))
-                if modo_comparativo:
-                    resultados_b.append(parse_sent(llamar_modelo_b(prompt)))
+                resultados.append(parse_sent(llamar_modelo(prompt)))
             bar.progress((i + 1) / total, text=f"Procesando {i+1}/{total}…")
 
-        df["sentimiento"] = resultados_a
+        df["sentimiento"] = resultados
         bar.empty()
         st.success("✅ Análisis completado.")
 
@@ -307,8 +224,7 @@ if seccion.startswith("1"):
         st.dataframe(df, use_container_width=True)
         descargar_csv(df, "sentimiento")
 
-        if modo_comparativo and resultados_b:
-            mostrar_comparativo(resultados_a, resultados_b, modelo_label, modelo_b_label, "Fila")
+
 
 
 # =========================================================
@@ -327,8 +243,7 @@ elif seccion.startswith("2"):
         if not (p1 and p2 and p3):
             st.warning("Completa los tres campos antes de continuar.")
         else:
-            val1_a, val2_a, val3_a = [], [], []
-            val1_b, val2_b, val3_b = [], [], []
+            val1, val2, val3 = [], [], []
             bar = st.progress(0)
             total = len(df)
 
@@ -343,28 +258,16 @@ elif seccion.startswith("2"):
                     return (p[0].strip(), p[1].strip(), p[2].strip()) if len(p) == 3 else ("N/A","N/A","N/A")
 
                 a, b, c = parse_ext(llamar_modelo(prompt))
-                val1_a.append(a); val2_a.append(b); val3_a.append(c)
-                if modo_comparativo:
-                    a2, b2, c2 = parse_ext(llamar_modelo_b(prompt))
-                    val1_b.append(a2); val2_b.append(b2); val3_b.append(c2)
+                val1.append(a); val2.append(b); val3.append(c)
                 bar.progress((i + 1) / total)
 
-            df[p1] = val1_a; df[p2] = val2_a; df[p3] = val3_a
+            df[p1] = val1; df[p2] = val2; df[p3] = val3
             bar.empty()
             st.success("✅ Extracción completada.")
             st.dataframe(df, use_container_width=True)
             descargar_csv(df, "extraccion_datos")
 
-            if modo_comparativo and val1_b:
-                df_comp = pd.DataFrame({
-                    f"{p1} (A)": val1_a, f"{p1} (B)": val1_b,
-                    f"{p2} (A)": val2_a, f"{p2} (B)": val2_b,
-                    f"{p3} (A)": val3_a, f"{p3} (B)": val3_b,
-                })
-                st.markdown('<div class="compare-box">', unsafe_allow_html=True)
-                st.subheader("🔀 Comparativa de modelos")
-                st.dataframe(df_comp, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 # =========================================================
@@ -375,15 +278,13 @@ elif seccion.startswith("3"):
     columna = st.selectbox("Columna de comentarios", df.columns)
 
     if st.button("▶ Clasificar Riesgo"):
-        riesgos_a, just_a = [], []
-        riesgos_b, just_b = [], []
+        riesgos, justificaciones = [], []
         bar = st.progress(0)
         total = len(df)
 
         for i, text in enumerate(df[columna]):
             if pd.isna(text):
-                riesgos_a.append("Nulo"); just_a.append("Sin información")
-                if modo_comparativo: riesgos_b.append("Nulo"); just_b.append("Sin información")
+                riesgos.append("Nulo"); justificaciones.append("Sin información")
             else:
                 prompt = (
                     f'Analiza este comentario de un colaborador: "{text}"\n'
@@ -397,14 +298,11 @@ elif seccion.startswith("3"):
                             p[1].strip() if len(p)>=2 else "N/A")
 
                 r, j = parse_riesgo(llamar_modelo(prompt))
-                riesgos_a.append(r); just_a.append(j)
-                if modo_comparativo:
-                    r2, j2 = parse_riesgo(llamar_modelo_b(prompt))
-                    riesgos_b.append(r2); just_b.append(j2)
+                riesgos.append(r); justificaciones.append(j)
             bar.progress((i + 1) / total)
 
-        df["riesgo_rotacion"] = riesgos_a
-        df["justificacion"]   = just_a
+        df["riesgo_rotacion"] = riesgos
+        df["justificacion"]   = justificaciones
         bar.empty()
         st.success("✅ Clasificación completada.")
 
@@ -416,8 +314,7 @@ elif seccion.startswith("3"):
         st.dataframe(df, use_container_width=True)
         descargar_csv(df, "riesgo_rotacion")
 
-        if modo_comparativo and riesgos_b:
-            mostrar_comparativo(riesgos_a, riesgos_b, modelo_label, modelo_b_label, "Fila")
+
 
 
 # =========================================================
@@ -425,10 +322,7 @@ elif seccion.startswith("3"):
 # =========================================================
 elif seccion.startswith("4"):
     st.header("🔍 Clusterización de Texto")
-    if proveedor == "OpenAI":
-        st.info("ℹ️ Embeddings: `text-embedding-3-small`")
-    else:
-        st.info("ℹ️ Embeddings: `text-embedding-004`")
+    st.info("ℹ️ Embeddings: `text-embedding-3-small`")
 
     columna = st.selectbox("Columna de texto", df.columns)
     k = st.slider("Número de clusters", 2, 8, 3)
@@ -439,13 +333,8 @@ elif seccion.startswith("4"):
         total = len(df)
 
         for i, text in enumerate(df[columna]):
-            if proveedor == "OpenAI":
-                resp = client.embeddings.create(model="text-embedding-3-small", input=str(text))
-                embeddings.append(resp.data[0].embedding)
-            else:
-                from google.genai import types as gtypes
-                emb = client.models.embed_content(model="text-embedding-004", contents=str(text))
-                embeddings.append(emb.embeddings[0].values)
+            resp = client.embeddings.create(model="text-embedding-3-small", input=str(text))
+            embeddings.append(resp.data[0].embedding)
             bar.progress((i + 1) / total)
 
         kmeans = KMeans(n_clusters=k, random_state=42)
@@ -517,8 +406,8 @@ RESPONSABILIDADES:
             st.stop()
 
         (puntajes, analisis_list, fortalezas_list, debilidades_list,
-         red_flags_list, preguntas_list, cultura_list,
-         exp_s, hab_s, edu_s, log_s, aj_s, liderazgo_s) = ([] for _ in range(13))
+         red_flags_list, preguntas_list, cultura_list, recomendacion_list,
+         exp_s, hab_s, edu_s, log_s, aj_s, liderazgo_s) = ([] for _ in range(14))
 
         bar = st.progress(0)
         total_rows = len(df)
@@ -623,6 +512,7 @@ DEBILIDADES: item1; item2; item3
             red_flags_list.append(extraer_campo("RED_FLAGS:"))
             preguntas_list.append(extraer_campo("PREGUNTAS_ENTREVISTA:"))
             cultura_list.append(extraer_campo("FIT_CULTURAL:"))
+            recomendacion_list.append(extraer_campo("RECOMENDACION:"))
 
             bar.progress((list(df.index).index(i) + 1) / total_rows)
 
@@ -634,7 +524,7 @@ DEBILIDADES: item1; item2; item3
         df["score_logros"]     = log_s
         df["score_ajuste"]     = aj_s
         df["score_liderazgo"]  = liderazgo_s
-        df["recomendacion"]    = [extraer_campo("RECOMENDACION:") for _ in range(len(df))]  # placeholder
+        df["recomendacion"]    = recomendacion_list
         df["analisis"]         = analisis_list
         df["fortalezas"]       = fortalezas_list
         df["debilidades"]      = debilidades_list
@@ -661,18 +551,23 @@ DEBILIDADES: item1; item2; item3
         st.subheader("🏆 Top 3 Candidatos")
         top3 = df_sorted.head(3)
         tcols = st.columns(3)
+        medallas = ["🥇", "🥈", "🥉"]
         for idx, (col_card, (_, row)) in enumerate(zip(tcols, top3.iterrows())):
-            nombre = str(row[col_nombre]) if col_nombre != "(ninguna)" else f"#{idx+1}"
-            pct = row["puntaje_total"]
+            nombre = str(row[col_nombre]).strip() if col_nombre != "(ninguna)" else ""
+            if not nombre or nombre == "nan":
+                nombre = f"Candidato {idx+1}"
+            pct = int(row["puntaje_total"])
+            analisis_txt = str(row.get("analisis", "")).strip()[:130]
             with col_card:
                 st.markdown(f"""
 <div class="candidate-card">
-  <strong>#{idx+1} {nombre[:28]}</strong><br/>
-  <span style="font-size:1.6rem;font-weight:800;color:#1a2e4a">{pct}/100</span>
+  <div style="font-size:1.5rem">{medallas[idx]}</div>
+  <div style="font-weight:800;font-size:1.05rem;margin:4px 0 2px">{nombre[:32]}</div>
+  <div style="font-size:2rem;font-weight:900;color:#2563eb">{pct}/100</div>
   <div class="score-bar-container">
     <div class="score-bar" style="width:{pct}%"></div>
   </div>
-  <small>{str(row.get('analisis',''))[:120]}…</small>
+  <div style="font-size:0.82rem;margin-top:8px;opacity:0.8">{analisis_txt}…</div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -701,12 +596,7 @@ DEBILIDADES: item1; item2; item3
 
         descargar_csv(df_sorted, "evaluacion_candidatos")
 
-        # ── Modo comparativo ──────────────────────────────
-        if modo_comparativo:
-            st.markdown('<div class="compare-box">', unsafe_allow_html=True)
-            st.subheader("🔀 Comparativa de modelos — re-evaluar con Modelo B")
-            st.info("Para la comparativa de reclutamiento, re-ejecuta la evaluación con el Modelo B activo como principal.")
-            st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 # =========================================================
@@ -743,7 +633,6 @@ RESPONDE SOLO EN ESTE FORMATO.
         st.divider()
 
         topico_list, subtopico_list, explicacion_list = [], [], []
-        topico_b, subtopico_b = [], []
         bar = st.progress(0)
         total = len(df)
 
@@ -770,14 +659,7 @@ EXPLICACION: (máx 15 palabras)
             subtopico_list.append(extraer("SUBTEMA:"))
             explicacion_list.append(extraer("EXPLICACION:"))
 
-            if modo_comparativo:
-                txt_b = llamar_modelo_b(prompt_ind)
-                def extraer_b(tag, t=txt_b):
-                    if tag not in t: return "N/A"
-                    try: return t.split(tag)[1].split("\n")[0].strip()
-                    except: return "N/A"
-                topico_b.append(extraer_b("TEMA:"))
-                subtopico_b.append(extraer_b("SUBTEMA:"))
+
 
             bar.progress((i + 1) / total)
 
@@ -790,8 +672,7 @@ EXPLICACION: (máx 15 palabras)
         st.dataframe(df, use_container_width=True)
         descargar_csv(df, "topic_modeling")
 
-        if modo_comparativo and topico_b:
-            mostrar_comparativo(topico_list, topico_b, modelo_label, modelo_b_label, "Fila")
+
 
 
 # =========================================================
@@ -841,8 +722,7 @@ elif seccion.startswith("7"):
             "GPT-4o / GPT-4.1",
             "GPT-4o-mini / GPT-4.1-mini",
             "o1 / o3 / o4 (razonamiento)",
-            "Gemini 2.5 Pro",
-            "Gemini 2.0 / 2.5 Flash",
+
             "Cualquier LLM (genérico)",
         ])
 
